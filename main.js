@@ -1,5 +1,9 @@
 import IMPLEMENTATIONS from './hash-implementations';
 
+const PROFILED_IMPLEMENTATIONS = IMPLEMENTATIONS.filter(algo => true);
+  //['webcrypto', 'sjcl', 'forge', 'forge [UTF8]'].indexOf(algo.name) >= 0
+  // ['webcrypto', 'forge', 'jssha2'].indexOf(algo.name) >= 0);
+
 const LIBRARIES = [
     'three.min.js',
     'jquery-2.1.4.min.js',
@@ -9,6 +13,10 @@ const LIBRARIES = [
     'raphael-min.js',
     'moment-with-locales.min.js',
 ];
+
+const ALL_LIBRARIES = LIBRARIES.filter( lib => true);
+  // ['three.min.js', 'angular.min.js'].indexOf(lib) >= 0);
+
 
 const PRECOMPUTED_RESULTS = {
     // computed with `sha256sum` cli of GNU coreutils
@@ -43,108 +51,215 @@ const PRECOMPUTED_RESULTS = {
     },
 };
 
-function req(url, callback) {
-
+// from http://www.html5rocks.com/en/tutorials/es6/promises/
+function get(url) {
+  // Return a new promise.
+  return new Promise(function(resolve, reject) {
+    // Do the usual XHR stuff
     var req = new XMLHttpRequest();
+    req.open('GET', url);
 
-    req.onreadystatechange = function(){
-        if ( req.readyState === 4 ) {
-            callback(req.responseText);
-        }
+    req.onload = function() {
+      // This is called even on 404 etc
+      // so check the status
+      if (req.status == 200) {
+        // Resolve the promise with the response text
+        resolve(req.response);
+      }
+      else {
+        // Otherwise reject with the status text
+        // which will hopefully be a meaningful error
+        reject(Error(req.statusText));
+      }
     };
 
-    req.open('GET',url);
+    // Handle network errors
+    req.onerror = function() {
+      reject(Error("Network Error"));
+    };
 
+    // Make the request
     req.send();
+  });
+}
 
+function sync_compute(source_code, algo) {
+  let source_head = source_code.substr(0, 10);
+  console.log("enter sync_compute for sync algo", algo, source_head)
+  try {
+    let past = new Date();
+    let hash = algo.compute(source_code);
+    return {
+      algo: algo,
+      hash: hash,
+      execTime: new Date() - past,
+    };
+  } finally {
+    console.log("exit sync_compute for sync algo", algo, source_head)
+  }
 }
 
 
-(function(){
+function promise_compute(source_code, algo) {
+  var promise;
 
-    var results = {}; for(var lib of LIBRARIES) { results[lib] = []; };
-    var libraries = {};
+  let source_head = source_code.substr(0, 10);
+
+  if (!algo.promise_compute) {
+    promise = new Promise(function (resolve, reject) {
+      console.log("Created promise for sync algo", algo, source_head)
+      try {
+          let result = sync_compute(source_code, algo)
+          console.log("Calling resolve for sync algo", algo, source_head)
+          resolve(result)
+      }
+      catch(e){
+        console.log("Calling reject for sync algo with error", algo, source_head, e)
+        reject(e)
+      }
+    })
+    return promise.catch( function (err) {
+      console.log("Promise then for sync algo with err", algo, source_head, err)
+      return {
+        algo: algo,
+        hash: err.toString(),
+        execTime: '-',
+      };
+    })
+  } else {
+    console.log("Creating promise for async algo", algo, source_head)
+    promise = algo.promise_compute(source_code).then( function (result) {
+      console.log("Promise then for async algo", algo, source_head)
+      result.algo = algo
+      return result;
+    })
+    console.log("Created promise for async algo", algo, source_head)
+  }
+  return promise;
+}
+
+function testlib(lib, source_code, results) {
+  console.log('enter testlib(' + lib)
+  var compute_promises = PROFILED_IMPLEMENTATIONS.map(algo =>
+    promise_compute(source_code, algo)
+  );
+
+  try {
+    return Promise.all(compute_promises).then( computes => {
+      console.log('Entering Promise.all() for lib:' + lib)
+      for (let compute of computes) {
+        results.push(Object.assign(
+            {},
+            compute.algo,
+            {
+                hash: compute.hash,
+                execTime: compute.execTime,
+                hash_is_correct: (function(){
+                    if( ! PRECOMPUTED_RESULTS[compute.algo.hash_function] ) return null;
+                    return compute.hash === PRECOMPUTED_RESULTS[compute.algo.hash_function][lib];
+                })(),
+            }
+        ));
+      }
+    })
+  } finally {
+    console.log('exit testlib(' + lib)
+  }
+}
+
+function queueTestlibRequests(lib) {
+  console.log('enter queueTestlibRequests(' + lib)
+  let source_code = libraries[lib].source_code
+  var requests = PROFILED_IMPLEMENTATIONS.map(algo =>
+    function() {
+        return promise_compute(source_code, algo).then( result => {
+          let end_result = Object.assign(
+            {},
+            algo,
+            result,
+            {
+              lib: lib,
+              hash_is_correct: (function(){
+                  if( ! PRECOMPUTED_RESULTS[algo.hash_function] ) return null;
+                  return result.hash === PRECOMPUTED_RESULTS[algo.hash_function][lib];
+              })()
+            })
+          results[lib].push(end_result)
+          return end_result
+        })
+    }
+  );
+
+  for (let cr of requests) {
+    computation_requests.push(cr);
+  }
+  console.log('exit queueTestlibRequests(' + lib)
+}
+
+
+function performRequests() {
+  console.log('enter performRequests: remaining requests=' + computation_requests.length)
+  try {
+    let computation = computation_requests.pop() // might be faster.
+    if (computation) {
+      computation().then(result => {
+        print_result(result)
+        console.log('Showing result', result)
+      }).then( function() {
+        setTimeout(performRequests, 0)
+      })
+    } else {
+      sort_results(results)
+      print_results(results, libraries)
+    }
+  } finally {
+    console.log('exit performRequests')
+  }
+}
+
+var out = document.getElementById("results");
+out.innerHTML = 'computing...';
+prepare_results_table();
+
+// computation requests are functions which should be invoked to
+// initiate computation of a particular algorithm
+var computation_requests = [];
+var libraries = {};
+var results = {}; for(var lib of ALL_LIBRARIES) { results[lib] = []; };
+
+setTimeout(main, 100) // allow for showing empty result tableaus
+
+function main() {
+    console.log('enter main')
+
     var n_resp_count = 0;
 
-    LIBRARIES.forEach(function(lib){
-        req('libs/'+lib, function(source_code){
+    let get_computations = ALL_LIBRARIES.map( lib => get('libs/'+lib));
 
-            libraries[lib] = {
-                source_code: source_code,
-                has_wide_char: (function(str){
-                    for( var i = 0; i < str.length; i++ ){
-                        if ( str.charCodeAt(i) >>> 8 ) return true;
-                    }
-                    return false;
-                })(source_code)
-            };
-
-            IMPLEMENTATIONS.forEach(function(algo){
-
-                var execTime;
-                var hash;
-
-                var past = new Date();
-
-                // This code does not work as I expected.
-                // The problem is that the promise.then callback
-                // is NOT executed while this iteration is running.
-                // It appeared to be run and the next outer forEach loop
-                // when a new request is done.
-                // As a consequence the time captured will be only captured when
-                // all implementations in this forEach loop have executed.
-                //
-                // There is an excellent article https://jakearchibald.com/2015/tasks-microtasks-queues-and-schedules/
-                // about which timing can be expected.
-                //
-                // However it appears that the triggering I observed with
-                // Chrome Version 47.0.2526.106 (64-bit) on OS X 10.10.5
-                // may not be explained there.
-
-                var promise;
-
-                try{
-                    hash = algo.compute(source_code);
-                    if (!(!!hash.then && typeof obj.then === 'function')) {
-                      promise = Promise.resolve(hash)
-                    } else {
-                      promise = hash
-                    }
+    let queue_computations = ALL_LIBRARIES.map( lib => {
+      return get('libs/'+lib).then( source_code => {
+        console.log('lib downloaded:' + lib)
+        libraries[lib] = {
+            source_code: source_code,
+            has_wide_char: (function(str){
+                for( var i = 0; i < str.length; i++ ){
+                    if ( str.charCodeAt(i) >>> 8 ) return true;
                 }
-                catch(e){
-                  promise = Promise.reject(e);
-                }
+                return false;
+            })(source_code)
+        };
+        print_result_lib_header(null, lib, libraries)
+      }).then( function() {
+        console.log('queuing test requests for lib:' + lib)
+        queueTestlibRequests(lib)
+      })
+    })
 
-                promise.then(function (result) {
-                  hash = result
-                  execTime = new Date() - past;
-                }).catch(function (e) {
-                  hash = e.toString();
-                  execTime = '-';
-                }).then( function() {
-                  results[lib].push(Object.assign(
-                      {},
-                      algo,
-                      {
-                          hash: hash,
-                          execTime: execTime,
-                          hash_is_correct: (function(){
-                              if( ! PRECOMPUTED_RESULTS[algo.hash_function] ) return null;
-                              return hash === PRECOMPUTED_RESULTS[algo.hash_function][lib];
-                          })(),
-                      }
-                  ));
-                })
-            });
-
-            if( ++n_resp_count === LIBRARIES.length ) {
-                sort_results(results);
-                print_results(results, libraries);
-            }
-        });
-    });
-
-})();
+    Promise.all(queue_computations).then( function() {
+      performRequests()
+    })
+    console.log('exit main')
+}
 
 function sort_results(results){
     for(var lib in results) {
@@ -160,42 +275,100 @@ function sort_results(results){
     }
 }
 
-var out = document.getElementById("results");
-out.innerHTML = 'computing...';
+function ids_table(lib) {
+  return {
+    title: 'id_title_' + lib,
+    table: 'id_table_' + lib
+  }
+}
 
-function print_results(results, libraries){
+function ids_table_entry(lib, algo) {
+  return {
+    time: 'id_algo_time_' + lib + '_' + algo.name,
+    hash: 'id_algo_hash_' + lib + '_' + algo.name,
+  }
+}
 
-        out.innerHTML = "";
+function createLibTitle(id, lib) {
+  let title = document.createElement("h3");
+  let table_ids = ids_table(lib)
+  title.id = table_ids.title
+  title.innerHTML = `Time to compute hash of ${lib} [not fetched yet]`;
+  return title
+}
 
-        for(var lib in results) {
+function createTableWithHeader(id) {
+  let table = document.createElement("table");
+  table.id = id
+  table.style.borderSpacing = '20px 0px';
+  table.style.fontFamily = 'monospace';
 
-            var title = document.createElement("h3");
-            title.innerHTML = "Time to compute hash of "+lib+" [~ "+Math.round(libraries[lib].source_code.length/1000)+" KB]";
-            if(libraries[lib].has_wide_char) title.innerHTML += " [contains wide character]";
+  let header = document.createElement("tr");
+  header.innerHTML = "<td>time (ms)</td><td>Hash Function</td><td>Implementation</td><td>hash</td>";
+  table.appendChild(header);
+  return table
+}
 
-            var table = document.createElement("table");
-            table.style.borderSpacing = '20px 0px';
-            table.style.fontFamily = 'monospace';
-            var header = document.createElement("tr");
-            header.innerHTML = "<td>time (ms)</td><td>Hash Function</td><td>Implementation</td><td>hash</td>";
-            table.appendChild(header);
+function prepare_results_table() {
+  out.innerHTML = '';
+  let libs = ALL_LIBRARIES
+  for (let lib of libs) {
+    let table_ids = ids_table(lib)
+    let title = createLibTitle(table_ids.title, lib)
+    let table = createTableWithHeader(table_ids.table)
+    out.appendChild(title)
+    out.appendChild(table)
 
-            out.appendChild(title);
-            out.appendChild(table);
+    for (let algo of PROFILED_IMPLEMENTATIONS) {
+      var result_row = document.createElement("tr");
+      let ids = ids_table_entry(lib, algo);
+      result_row.innerHTML = `
+          <td id='${ids.time}'>pending</td>
+          <td>${algo.hash_function}</td>
+          <td><a target='_blank' href='${algo.source}'>${algo.name}</a></td>
+          <td id='${ids.hash}'>pending...</td>`;
+      table.appendChild(result_row);
+    }
+  }
+}
 
-            for(var algo of results[lib]) {
+function print_result_lib_header(arg_title, lib, libraries) {
+  let title = arg_title || document.getElementById(ids_table(lib).title);
+  title.innerHTML = "Time to compute hash of "+lib+" [~ "+Math.round(libraries[lib].source_code.length/1000)+" KB]";
+  if(libraries[lib].has_wide_char) title.innerHTML += " [contains wide character]";
+}
 
-                var result_row = document.createElement("tr");
-                var color = algo.hash_is_correct && 'black' || algo.hash_is_correct===false && 'red' || 'grey';
-                result_row.innerHTML = `
-                    <td>${algo.execTime}</td>
-                    <td>${algo.hash_function}</td>
-                    <td><a target='_blank' href='${algo.source}'>${algo.name}</a></td>
-                    <td style='color: ${color}'>${algo.hash}</td>`;
-                table.appendChild(result_row);
+function print_result(result) {
+  let {lib, algo, execTime, hash} = result;
+  let ids = ids_table_entry(lib, algo)
+  let etime = document.getElementById(ids.time)
+  let ehash = document.getElementById(ids.hash)
+  let color = result.hash_is_correct && 'black' || result.hash_is_correct===false && 'red' || 'grey';
+  etime.innerHTML = execTime
+  ehash.style.color = color
+  ehash.innerHTML = hash
+}
 
-            }
+function print_results() {
+  out.innerHTML = ''
+  let libs = ALL_LIBRARIES
+  for (let lib of libs) {
+    let table_ids = ids_table(lib)
+    let title = createLibTitle(table_ids.title, lib)
+    print_result_lib_header(title, lib, libraries)
+    let table = createTableWithHeader(table_ids.table)
+    out.appendChild(title)
+    out.appendChild(table)
+    for(let result of results[lib]) {
+      let result_row = document.createElement("tr");
+      let color = result.hash_is_correct && 'black' || result.hash_is_correct===false && 'red' || 'grey';
+      result_row.innerHTML = `
+        <td>${result.execTime}</td>
+        <td>${result.hash_function}</td>
+        <td><a target='_blank' href='${result.source}'>${result.name}</a></td>
+        <td style='color: ${color}'>${result.hash}</td>`;
 
-        }
-
+      table.appendChild(result_row);
+    }
+  }
 }
