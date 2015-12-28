@@ -1,6 +1,6 @@
 import IMPLEMENTATIONS from './hash-implementations';
 
-const LIBRARIES = [ 
+const LIBRARIES = [
     'three.min.js',
     'jquery-2.1.4.min.js',
     'angular.min.js',
@@ -8,9 +8,9 @@ const LIBRARIES = [
     'd3.min.js',
     'raphael-min.js',
     'moment-with-locales.min.js',
-]; 
+];
 
-const PRECOMPUTED_RESULTS = { 
+const PRECOMPUTED_RESULTS = {
     // computed with `sha256sum` cli of GNU coreutils
     'sha256': {
         'three.min.js': '1f7805e0870ff94285773806bccc88fa4c992a159b02aa5288e070f1356d3836',
@@ -41,9 +41,9 @@ const PRECOMPUTED_RESULTS = {
         'react-0.13.3.min.js':        'c3b6b1bdf51c9ef4ba3473a2e1dcb83a',
         'three.min.js':               'dc74fdfec0aab5ad75af6b99e2c37cb0',
     },
-}; 
+};
 
-function req(url, callback) { 
+function req(url, callback) {
 
     var req = new XMLHttpRequest();
 
@@ -57,7 +57,7 @@ function req(url, callback) {
 
     req.send();
 
-} 
+}
 
 
 (function(){
@@ -86,28 +86,55 @@ function req(url, callback) {
 
                 var past = new Date();
 
+                // This code does not work as I expected.
+                // The problem is that the promise.then callback
+                // is NOT executed while this iteration is running.
+                // It appeared to be run and the next outer forEach loop
+                // when a new request is done.
+                // As a consequence the time captured will be only captured when
+                // all implementations in this forEach loop have executed.
+                //
+                // There is an excellent article https://jakearchibald.com/2015/tasks-microtasks-queues-and-schedules/
+                // about which timing can be expected.
+                //
+                // However it appears that the triggering I observed with
+                // Chrome Version 47.0.2526.106 (64-bit) on OS X 10.10.5
+                // may not be explained there.
+
+                var promise;
+
                 try{
                     hash = algo.compute(source_code);
-                    execTime = new Date() - past;
+                    if (!(!!hash.then && typeof obj.then === 'function')) {
+                      promise = Promise.resolve(hash)
+                    } else {
+                      promise = hash
+                    }
                 }
                 catch(e){
-                    hash = e.toString();
-                    execTime = '-';
+                  promise = Promise.reject(e);
                 }
 
-                results[lib].push(Object.assign(
-                    {},
-                    algo,
-                    {
-                        hash: hash,
-                        execTime: execTime,
-                        hash_is_correct: (function(){
-                            if( ! PRECOMPUTED_RESULTS[algo.hash_function] ) return null;
-                            return hash === PRECOMPUTED_RESULTS[algo.hash_function][lib];
-                        })(),
-                    }
-                ));
-
+                promise.then(function (result) {
+                  hash = result
+                  execTime = new Date() - past;
+                }).catch(function (e) {
+                  hash = e.toString();
+                  execTime = '-';
+                }).then( function() {
+                  results[lib].push(Object.assign(
+                      {},
+                      algo,
+                      {
+                          hash: hash,
+                          execTime: execTime,
+                          hash_is_correct: (function(){
+                              if( ! PRECOMPUTED_RESULTS[algo.hash_function] ) return null;
+                              return hash === PRECOMPUTED_RESULTS[algo.hash_function][lib];
+                          })(),
+                      }
+                  ));
+                })
             });
 
             if( ++n_resp_count === LIBRARIES.length ) {
