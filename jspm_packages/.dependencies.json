@@ -1,0 +1,16 @@
+{
+  "npm:bows@1.4.8": {
+    "andlog": "npm:andlog@^1.0.0",
+    "fs": "github:jspm/nodelibs-fs@^0.1.0"
+  },
+  "npm:andlog@1.0.0": {},
+  "github:jspm/nodelibs-fs@0.1.2": {},
+  "npm:sha.js@2.4.2": {
+    "inherits": "npm:inherits@^2.0.1",
+    "buffer": "github:jspm/nodelibs-buffer@^0.1.0",
+    "fs": "github:jspm/nodelibs-fs@^0.1.0",
+    "process": "github:jspm/nodelibs-process@^0.1.0"
+  },
+  "github:jmcriffey/bower-traceur-runtime@0.0.88": {},
+  "github:jmcriffey/bower-traceur@0.0.88": {}
+}

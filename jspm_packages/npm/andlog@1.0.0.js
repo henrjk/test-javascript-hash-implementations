@@ -1,0 +1,1 @@
+module.exports = require("npm:andlog@1.0.0/andlog");

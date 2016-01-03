@@ -1,0 +1,1 @@
+module.exports = require("npm:bows@1.4.8/bows");
