@@ -1,6 +1,7 @@
 {
   "jspm": {
     "dependencies": {
+      "bows": "npm:bows@^1.4.8",
       "buffer-crc32": "npm:buffer-crc32@^0.2.5",
       "sha.js": "npm:sha.js@^2.4.2"
     },

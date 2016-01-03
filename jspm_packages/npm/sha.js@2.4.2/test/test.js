@@ -1,8 +1,8 @@
 /* */ 
 (function(Buffer) {
-  var crypto = require("crypto");
-  var tape = require("tape");
-  var Sha1 = require("../index").sha1;
+  var crypto = require('crypto');
+  var tape = require('tape');
+  var Sha1 = require('../index').sha1;
   var inputs = [['', 'ascii'], ['abc', 'ascii'], ['123', 'ascii'], ['123456789abcdef123456789abcdef123456789abcdef123456789abcdef', 'ascii'], ['123456789abcdef123456789abcdef123456789abcdef123456789abc', 'ascii'], ['123456789abcdef123456789abcdef123456789abcdef123456789ab', 'ascii'], ['0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde', 'ascii'], ['0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 'ascii'], ['foobarbaz', 'ascii']];
   tape("hash is the same as node's crypto", function(t) {
     inputs.forEach(function(v) {
@@ -59,4 +59,4 @@
     });
     t.end();
   });
-})(require("buffer").Buffer);
+})(require('buffer').Buffer);

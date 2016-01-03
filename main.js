@@ -1,4 +1,7 @@
 import IMPLEMENTATIONS from './hash-implementations';
+import bows from 'bows'
+
+const log = bows('main.js')
 
 const PROFILED_IMPLEMENTATIONS = IMPLEMENTATIONS.filter(algo => true);
   //['webcrypto', 'sjcl', 'forge', 'forge [UTF8]'].indexOf(algo.name) >= 0
@@ -14,8 +17,9 @@ const LIBRARIES = [
     'moment-with-locales.min.js',
 ];
 
-const ALL_LIBRARIES = LIBRARIES.filter( lib => true);
-  // ['three.min.js', 'angular.min.js'].indexOf(lib) >= 0);
+const ALL_LIBRARIES = LIBRARIES.filter( lib =>
+  //true);
+  ['three.min.js', 'angular.min.js', 'moment-with-locales.min.js'].indexOf(lib) >= 0);
 
 
 const PRECOMPUTED_RESULTS = {
@@ -85,7 +89,7 @@ function get(url) {
 
 function sync_compute(source_code, algo) {
   let source_head = source_code.substr(0, 10);
-  console.log("enter sync_compute for sync algo", algo, source_head)
+  log.debug("enter sync_compute for sync algo", algo, source_head)
   try {
     let past = new Date();
     let hash = algo.compute(source_code);
@@ -95,7 +99,7 @@ function sync_compute(source_code, algo) {
       execTime: new Date() - past,
     };
   } finally {
-    console.log("exit sync_compute for sync algo", algo, source_head)
+    log.debug("exit sync_compute for sync algo", algo, source_head)
   }
 }
 
@@ -107,19 +111,19 @@ function promise_compute(source_code, algo) {
 
   if (!algo.promise_compute) {
     promise = new Promise(function (resolve, reject) {
-      console.log("Created promise for sync algo", algo, source_head)
+      log.debug("Created promise for sync algo", algo, source_head)
       try {
           let result = sync_compute(source_code, algo)
-          console.log("Calling resolve for sync algo", algo, source_head)
+          log.debug("Calling resolve for sync algo", algo, source_head)
           resolve(result)
       }
       catch(e){
-        console.log("Calling reject for sync algo with error", algo, source_head, e)
+        log.debug("Calling reject for sync algo with error", algo, source_head, e)
         reject(e)
       }
     })
     return promise.catch( function (err) {
-      console.log("Promise then for sync algo with err", algo, source_head, err)
+      log.debug("Promise then for sync algo with err", algo, source_head, err)
       return {
         algo: algo,
         hash: err.toString(),
@@ -127,26 +131,26 @@ function promise_compute(source_code, algo) {
       };
     })
   } else {
-    console.log("Creating promise for async algo", algo, source_head)
+    log.debug("Creating promise for async algo", algo, source_head)
     promise = algo.promise_compute(source_code).then( function (result) {
-      console.log("Promise then for async algo", algo, source_head)
+      log.debug("Promise then for async algo", algo, source_head)
       result.algo = algo
       return result;
     })
-    console.log("Created promise for async algo", algo, source_head)
+    log.debug("Created promise for async algo", algo, source_head)
   }
   return promise;
 }
 
 function testlib(lib, source_code, results) {
-  console.log('enter testlib(' + lib)
+  log.debug('enter testlib(' + lib)
   var compute_promises = PROFILED_IMPLEMENTATIONS.map(algo =>
     promise_compute(source_code, algo)
   );
 
   try {
     return Promise.all(compute_promises).then( computes => {
-      console.log('Entering Promise.all() for lib:' + lib)
+      log.debug('Entering Promise.all() for lib:' + lib)
       for (let compute of computes) {
         results.push(Object.assign(
             {},
@@ -163,12 +167,12 @@ function testlib(lib, source_code, results) {
       }
     })
   } finally {
-    console.log('exit testlib(' + lib)
+    log.debug('exit testlib(' + lib)
   }
 }
 
 function queueTestlibRequests(lib) {
-  console.log('enter queueTestlibRequests(' + lib)
+  log.debug('enter queueTestlibRequests(' + lib)
   let source_code = libraries[lib].source_code
   var requests = PROFILED_IMPLEMENTATIONS.map(algo =>
     function() {
@@ -193,18 +197,18 @@ function queueTestlibRequests(lib) {
   for (let cr of requests) {
     computation_requests.push(cr);
   }
-  console.log('exit queueTestlibRequests(' + lib)
+  log.debug('exit queueTestlibRequests(' + lib)
 }
 
 
 function performRequests() {
-  console.log('enter performRequests: remaining requests=' + computation_requests.length)
+  log.debug('enter performRequests: remaining requests=' + computation_requests.length)
   try {
     let computation = computation_requests.pop() // might be faster.
     if (computation) {
       computation().then(result => {
         print_result(result)
-        console.log('Showing result', result)
+        log.debug('Showing result', result)
       }).then( function() {
         setTimeout(performRequests, 0)
       })
@@ -213,7 +217,7 @@ function performRequests() {
       print_results(results, libraries)
     }
   } finally {
-    console.log('exit performRequests')
+    log.debug('exit performRequests')
   }
 }
 
@@ -230,7 +234,7 @@ var results = {}; for(var lib of ALL_LIBRARIES) { results[lib] = []; };
 setTimeout(main, 100) // allow for showing empty result tableaus
 
 function main() {
-    console.log('enter main')
+    log.debug('enter main')
 
     var n_resp_count = 0;
 
@@ -238,7 +242,7 @@ function main() {
 
     let queue_computations = ALL_LIBRARIES.map( lib => {
       return get('libs/'+lib).then( source_code => {
-        console.log('lib downloaded:' + lib)
+        log.debug('lib downloaded:' + lib)
         libraries[lib] = {
             source_code: source_code,
             has_wide_char: (function(str){
@@ -250,7 +254,7 @@ function main() {
         };
         print_result_lib_header(null, lib, libraries)
       }).then( function() {
-        console.log('queuing test requests for lib:' + lib)
+        log.debug('queuing test requests for lib:' + lib)
         queueTestlibRequests(lib)
       })
     })
@@ -258,7 +262,7 @@ function main() {
     Promise.all(queue_computations).then( function() {
       performRequests()
     })
-    console.log('exit main')
+    log.debug('exit main')
 }
 
 function sort_results(results){

@@ -1,6 +1,6 @@
 /* */ 
 (function(process) {
-  var createHash = require("./browserify");
+  var createHash = require('./browserify');
   var argv = process.argv.slice(2);
   function pipe(algorithm, s) {
     var start = Date.now();
@@ -28,9 +28,9 @@
     } else {
       var filename = argv.pop();
       var algorithm = argv.pop();
-      pipe(algorithm, require("fs").createReadStream(filename));
+      pipe(algorithm, require('fs').createReadStream(filename));
     }
   } else {
     usage();
   }
-})(require("process"));
+})(require('process'));

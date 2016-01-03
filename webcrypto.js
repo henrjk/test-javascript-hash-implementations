@@ -1,4 +1,6 @@
+import bows from 'bows'
 
+const log = bows('webcrypto.js')
 
 const hexEncodeArray = '0123456789abcdef'.split('')
 // see jsper.com/hex-conversion
@@ -49,7 +51,7 @@ export function promise_compute_sha256(text) {
   return window.crypto.subtle.digest(
       'SHA-256', ab)
     .then( function (result) {
-      console.log("Promise then for webcrypto, recording time", source_head)
+      log.debug("Promise then for webcrypto, recording time", source_head)
       var res = {
         hash: ab2hex(result),
         execTime: new Date() - past
@@ -62,17 +64,17 @@ var test = false;
 
 if (test) {
   promise_compute_sha256("hello").then(function (res) {
-    console.log("sha256 of hello is: ", res)
+    log.debug("sha256 of hello is: ", res)
   })
 
   promise_compute_sha256("hello").then(function (res) {
-    console.log("sha256 of hello is: ", res)
+    log.debug("sha256 of hello is: ", res)
     const expected = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     if (res.hash !== expected) {
       throw new Error("Expect sha256 of 'hello' to be " + expected)
     }
   }).catch(function (err) {
-    console.log(err)
+    log.debug(err)
     throw err
   })
 
@@ -82,5 +84,5 @@ if (test) {
   bytes[1] = 128 + 4
 
 
-  console.log("ab2hex()=", ab2hex(bytes))
+  log.debug("ab2hex()=", ab2hex(bytes))
 }

@@ -1,14 +1,13 @@
 System.config({
-  "defaultJSExtensions": true,
-  "transpiler": "traceur",
-  "paths": {
+  defaultJSExtensions: true,
+  transpiler: "traceur",
+  paths: {
     "github:*": "jspm_packages/github/*",
     "npm:*": "jspm_packages/npm/*"
-  }
-});
+  },
 
-System.config({
-  "map": {
+  map: {
+    "bows": "npm:bows@1.4.8",
     "buffer-crc32": "npm:buffer-crc32@0.2.5",
     "sha.js": "npm:sha.js@2.4.2",
     "traceur": "github:jmcriffey/bower-traceur@0.0.88",
@@ -21,6 +20,10 @@ System.config({
     },
     "github:jspm/nodelibs-util@0.1.0": {
       "util": "npm:util@0.10.3"
+    },
+    "npm:bows@1.4.8": {
+      "andlog": "npm:andlog@1.0.0",
+      "fs": "github:jspm/nodelibs-fs@0.1.2"
     },
     "npm:buffer-crc32@0.2.5": {
       "buffer": "github:jspm/nodelibs-buffer@0.1.0"
@@ -45,4 +48,3 @@ System.config({
     }
   }
 });
-

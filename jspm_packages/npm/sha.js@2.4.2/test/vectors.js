@@ -1,10 +1,10 @@
 /* */ 
 (function(Buffer, process) {
-  var tape = require("tape");
-  var vectors = require("hash-test-vectors");
-  var Buffer = require("buffer").Buffer;
-  var hexpp = require("../hexpp");
-  var createHash = require("../index");
+  var tape = require('tape');
+  var vectors = require('hash-test-vectors');
+  var Buffer = require('buffer').Buffer;
+  var hexpp = require('../hexpp');
+  var createHash = require('../index');
   function makeTest(alg, i, verbose) {
     var v = vectors[i];
     tape(alg + ': NIST vector ' + i, function(t) {
@@ -48,4 +48,4 @@
       makeTest('sha512', i);
     });
   }
-})(require("buffer").Buffer, require("process"));
+})(require('buffer').Buffer, require('process'));
